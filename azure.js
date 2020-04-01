@@ -1,44 +1,44 @@
-const azure = require('azure-storage');
+const { BlobServiceClient, StorageSharedKeyCredential } = require('@azure/storage-blob');
 const { promisify } = require('util');
 const debug = require('debug')('koa:storage:azure');
 
-const blobService = azure.createBlobService();
 const containerName = process.env.AZURE_STORAGE_CONTAINER;
+const account = process.env.AZURE_STORAGE_ACCOUNT;
+const accountKey = process.env.AZURE_STORAGE_ACCESS_KEY;
 
-const createContainerIfNotExistsPromise = promisify(
-  blobService.createContainerIfNotExists,
-).bind(blobService);
+const sharedKeyCredential = new StorageSharedKeyCredential(account, accountKey);
+const blobServiceClient = new BlobServiceClient(
+  `https://${account}.blob.core.windows.net`,
+  sharedKeyCredential,
+);
+
+const createContainerIfNotExists = async () => {
+  const containerClient = blobServiceClient.getContainerClient(containerName);
+  const createContainerResponse = await containerClient.create();
+  return createContainerResponse;
+};
 
 const createPresignedPost = async (ctx) => {
   debug('createPresignedPost');
-  await createContainerIfNotExistsPromise(containerName);
+  await createContainerIfNotExists(containerName);
+  // Generate user delegation SAS for a container
+  const userDelegationKey = await blobServiceClient.getUserDelegationKey(startsOn, expiresOn);
+  const containerSAS = generateBlobSASQueryParameters({
+    containerName, // Required
+    permissions: ContainerSASPermissions.parse('racwdl'), // Required
+    startsOn, // Required. Date type
+    expiresOn, // Optional. Date type
+    ipRange: { start: '0.0.0.0', end: '255.255.255.255' }, // Optional
+    protocol: SASProtocol.HttpsAndHttp, // Optional
+    version: '2018-11-09', // Must >= 2018-11-09 to generate user delegation SAS
+  },
+  userDelegationKey, // UserDelegationKey
+  accountName).toString();
 };
 
 const createPresignedGet = async (ctx) => {
   debug('createPresignedGet');
-  await createContainerIfNotExistsPromise(containerName);
-  const startDate = new Date();
-  const expiryDate = new Date(startDate);
-  expiryDate.setMinutes(startDate.getMinutes() + 100);
-  startDate.setMinutes(startDate.getMinutes() - 100);
-
-  const sharedAccessPolicy = {
-    AccessPolicy: {
-      Permissions: azure.BlobUtilities.SharedAccessPermissions.READ,
-      Start: startDate,
-      Expiry: expiryDate,
-    },
-  };
-
-  const blobName = ctx.query.name;
-  const token = blobService.generateSharedAccessSignature(
-    containerName,
-    blobName,
-    sharedAccessPolicy,
-  );
-  ctx.body = {
-    url: blobService.getUrl(containerName, blobName, token),
-  };
+  await createContainerIfNotExists(containerName);
 };
 
 module.exports = {
